@@ -1,5 +1,9 @@
-//libreria lora
-//#include "LoRaWan_APP.h"
+
+//Lib wifi
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>  //VEREMOS SI SE USA
+
 #include "Arduino.h"
 //libreria gps
 #include <HardwareSerial.h>
@@ -8,7 +12,13 @@
 #include <Wire.h>
 #include <MPU9250_asukiaaa.h> // Librería para el MPU9250
 
-//Obs: LoRa solo manda bytes, por lo que haremos una conversión entre los valores float de los sensores a bytes.
+//Credenciales wifi
+const char* ssid = "VTR-6216549";
+const char* password = "n4rdVvqptnkf";
+//Credenciales Thingspeak
+//const char* server = "http://api.thingspeak.com/channels/2998250/bulk_update.json"; //OPCION 1
+const char* server = "http://api.thingspeak.com/update"; //OPCION 2
+const char* apiKey = "X52LATNR1YTYZBJD";  // << TU Write API Key
 
 
 //Variables acelerometro (PIN gpio 21 para SDA y GPIO 22 para SCL)
@@ -32,19 +42,11 @@ HardwareSerial gpsSerial(2);
 TinyGPSPlus gps;
 
 
-/*
-//Definimos funcion para convertir float a bytes
-void floatToBytes(float val, uint8_t* bytes_array){
-  union{
-    float f;
-    uint8_t b[4];
-  } data;   //el float y arraybytes comparten la direccion de memoria
-  data.f = val;
-  memcpy(bytes_array, data.b, 4);
-}
-  //al hacer data.f = val;, se llenan automáticamente los 4 bytes de data.b con la representación binaria de ese float.
-*/
 
+//Funciones que llamaremos
+//void setEspPins();
+void startWifi();
+void sendSensorData();
 
 
 void setup() {
@@ -62,13 +64,74 @@ void setup() {
   gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
   Serial.println("Esperando fix de GPS...");
   
-  // Inicializa el hardware
-  //Serial.println("Inicializando LoRaWAN con ABP...");
-  //Mcu.begin(HELTEC_BOARD, SLOW_CLK_TPYE);
-
- 
+  // Inicializamos el WiFi
+  //setEspPins();
+  startWifi();
+  Serial.println();
 
 }
+
+//Funcion que inicializa el WiFi
+void startWifi() { 
+  WiFi.mode(WIFI_STA);               
+  WiFi.begin(ssid, password);        
+  Serial.print("Connecting to ");
+  Serial.print(ssid); Serial.println(" ...");
+  
+  int i = 0;
+  while (WiFi.status() != WL_CONNECTED) {   
+    delay(1000);
+    Serial.print(++i); Serial.print(' ');
+    Serial.println(WiFi.status());
+  }
+
+  Serial.println('\n');
+  Serial.println("Connection established!");  
+  Serial.print("Connected to ");
+  Serial.println(WiFi.SSID());              
+  Serial.print("IP address:\t");
+  Serial.println(WiFi.localIP());           
+}
+
+void sendSensorData(){
+  HTTPClient http;
+  Serial.println(String("URL generada: ") + server);
+  http.begin(server);
+  http.addHeader("Content-Type", "application/json");
+
+  //Armamos el cuerpo del json
+  String json = "{";
+    json += "\"write_api_key\":\"" + String(apiKey) + "\",";
+    json += "\"updates\":[";
+    json += "{";
+    //json += "\"created_at\":\"" + timestamp + "\",";              //No la estamos incluyendo por ahora
+    json += "\"field1\":" + String(aY, 2) + ",";  //(le saco el ", decimal") del parentesis pq se lo corto antes
+    json += "\"field2\":" + String(aZ, 2) + ",";
+    json += "\"field3\":" + String(aX, 2) + ",";
+    /*
+    json += "\"field4\":" + String(aSqrt, 2) + ",";
+    json += "\"field5\":" + String(gps.location.lat(), 5) + ",";
+    json += "\"field6\":" + String(gps.location.lng(), 5) + ",";
+    json += "\"field7\":" + String(volt_bateria, 3) + ",";
+    */
+
+    //json += "\"Status\":\"" + status + "\"";                      //Mensaje sobre estado del dispositivo ("OK, Alerta, "Sensor error", "Bateria baja, etc") (No lo incluimos, tampoco esta bien declarado)
+    json += "}";    // fin del primer objeto de updates
+    json += "]}";   // fin del arreglo de updates y del JSON
+
+  //Enviamos mediante POST
+    int httpCode = http.POST(json);
+    String payload = http.getString();  //Guardamos la respuesta del servidor en la variable payload
+
+    Serial.print("Código HTTP: ");
+    Serial.println(httpCode);
+    Serial.print("Respuesta del servidor: ");
+    Serial.println(payload);
+
+    http.end();
+}
+
+  
 
 void loop() {
 
@@ -99,6 +162,7 @@ void loop() {
   } else {
     Serial.println("Sin fix todavía...");
   }
+  sendSensorData();
 
     // Imprime los datos por serial
   Serial.print("Acelerómetro [g]: ");
@@ -109,26 +173,6 @@ void loop() {
   Serial.print(volt_bateria, 3);
 
 
-
-
-  delay(5000);
-
-
-
-
-  //ENVIO DE DATOS
-
-  
-
-  /*
-  //Definimos el array de bytes y lo llenamos con nuestra funcion floatToBytes
-  uint8_t myData[24];  // Ejemplo: dato simple en el payload
-  floatToBytes(gps.location.lat(),   myData + 0);
-  floatToBytes(gps.location.lng(),   myData + 4);
-  floatToBytes(aX,                   myData + 8);
-  floatToBytes(aY,                   myData + 12);
-  floatToBytes(aZ,                   myData + 16);
-  floatToBytes(volt_bateria,        myData + 20);
-  */
+  delay(15000);
 
 }
