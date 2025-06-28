@@ -27,7 +27,9 @@ uint8_t appEui[]={};
 uint8_t appKey[]={};
 
 
-/* ABP para*/
+
+/*    //Credenciales Lab
+
 uint32_t devAddr = 0x260C83D8;  // Dirección de dispositivo (TTN)
 
 uint8_t nwkSKey[] = {           // Clave de red (TTN)
@@ -39,6 +41,19 @@ uint8_t appSKey[] = {           // Clave de aplicación (TTN)
   0xA6, 0x3D, 0xD1, 0x5A, 0xAB, 0xA0, 0x6B, 0xC5,
 0x4E, 0x65, 0xF9, 0x42, 0x02, 0xF4, 0x0E, 0x73
 };
+*/
+
+uint32_t devAddr = (uint32_t) 0x260CBD16;                 // Dirección de dispositivo asignada en la red
+
+uint8_t nwkSKey[] = {                          //Parámetro de autenticación de red encapsulado
+  0xEF, 0x37, 0xE8, 0x31, 0x4D, 0xA5, 0x5A, 0xB2,
+  0xF1, 0xB0, 0x3C, 0x03, 0xFC, 0x52, 0x0C, 0xD5
+ };                                                  //EF37E8314DA55AB2F1B03C03FC520CD5 (valor nwskey hexadecimal no escrito por bytes)
+ 
+uint8_t appSKey[] = {
+  0xD9, 0xDC, 0x2B, 0x48, 0xD7, 0xDB, 0xA3, 0xA2,
+  0xEE, 0x1C, 0x12, 0x34, 0xAE, 0xB8, 0xC3, 0x42};   
+
 
 /*LoraWan channelsmask, default channels 0-7*/ 
 uint16_t userChannelsMask[6]={ 0x00FF,0x0000,0x0000,0x0000,0x0000,0x0000 };
@@ -108,26 +123,29 @@ static void prepareTxFrame( uint8_t port )
 void setup() {
   Serial.begin(115200);
   Mcu.begin(HELTEC_BOARD,SLOW_CLK_TPYE);
+  deviceState = DEVICE_STATE_INIT;
 }
 
 void loop()
 {
   delay(5000);
-  Serial.print("entra al loop");
+  //Serial.print("entra al loop");
   deviceState = DEVICE_STATE_INIT;
   switch( deviceState )
   {
     case DEVICE_STATE_INIT:
     {
-//#if(LORAWAN_DEVEUI_AUTO)
-//      LoRaWAN.generateDeveuiByChipID();
-//#endif
+#if(LORAWAN_DEVEUI_AUTO)
+      LoRaWAN.generateDeveuiByChipID();
+#endif
       LoRaWAN.init(loraWanClass,loraWanRegion);
       //both set join DR and DR when ADR off 
-      Serial.print("LoRaWAN.init() ejecutado");
+      //Serial.print("LoRaWAN.init() ejecutado");
 
-      LoRaWAN.setDefaultDR(3);
-      Serial.print("setDefaultDR(3) ejecutado");
+      //LoRaWAN.setDefaultDR(3);
+      //Serial.print("setDefaultDR(3) ejecutado");
+      deviceState = DEVICE_STATE_JOIN;
+
       break;
     }
     case DEVICE_STATE_JOIN:
