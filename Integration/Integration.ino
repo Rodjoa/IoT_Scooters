@@ -218,6 +218,6 @@ void loop() {
   Serial.print(volt_bateria, 3);
 
 
-  delay(15000);
+  delay(11000);
 
 }
