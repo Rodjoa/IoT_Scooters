@@ -1,3 +1,5 @@
+#include <ThingSpeak.h>
+
 
 //Lib wifi
 #include <WiFi.h>
@@ -16,8 +18,8 @@
 const char* ssid = "VTR-6216549";
 const char* password = "n4rdVvqptnkf";
 //Credenciales Thingspeak
-//const char* server = "http://api.thingspeak.com/channels/2998250/bulk_update.json"; //OPCION 1
-const char* server = "http://api.thingspeak.com/update"; //OPCION 2
+//const char* server = "http://api.thingspeak.com/channels/2998250/bulk_update.json"; //OPCION 1  Se usa con formato de JSON PARA BULK UPDATE
+const char* server = "http://api.thingspeak.com/update";                            //OPCION 2  Usa formato simple de parametros get
 const char* apiKey = "X52LATNR1YTYZBJD";  // << TU Write API Key
 
 
@@ -93,11 +95,18 @@ void startWifi() {
   Serial.println(WiFi.localIP());           
 }
 
+
+
+
+ /*OPCION 1
 void sendSensorData(){
   HTTPClient http;
   Serial.println(String("URL generada: ") + server);
   http.begin(server);
   http.addHeader("Content-Type", "application/json");
+
+
+ 
 
   //Armamos el cuerpo del json
   String json = "{";
@@ -108,12 +117,12 @@ void sendSensorData(){
     json += "\"field1\":" + String(aY, 2) + ",";  //(le saco el ", decimal") del parentesis pq se lo corto antes
     json += "\"field2\":" + String(aZ, 2) + ",";
     json += "\"field3\":" + String(aX, 2) + ",";
-    /*
+    
     json += "\"field4\":" + String(aSqrt, 2) + ",";
     json += "\"field5\":" + String(gps.location.lat(), 5) + ",";
     json += "\"field6\":" + String(gps.location.lng(), 5) + ",";
     json += "\"field7\":" + String(volt_bateria, 3) + ",";
-    */
+    
 
     //json += "\"Status\":\"" + status + "\"";                      //Mensaje sobre estado del dispositivo ("OK, Alerta, "Sensor error", "Bateria baja, etc") (No lo incluimos, tampoco esta bien declarado)
     json += "}";    // fin del primer objeto de updates
@@ -130,10 +139,46 @@ void sendSensorData(){
 
     http.end();
 }
+  */
 
+
+  //OPCION 2:
+
+  void sendSensorData(){
+  HTTPClient http;
+  
+  // Usa HTTPS y formato simple de parámetros GET
+  String url = "https://api.thingspeak.com/update?api_key=" + String(apiKey);
+  url += "&field1=" + String(aY, 2);
+  url += "&field2=" + String(aZ, 2);
+  url += "&field3=" + String(aX, 2);
+  // Agrega los demás campos cuando los necesites
+  
+  Serial.println("URL: " + url);
+  
+  http.begin(url);
+  int httpCode = http.GET();
+  
+  if(httpCode > 0) {
+    String payload = http.getString();
+    Serial.print("Código HTTP: ");
+    Serial.println(httpCode);
+    Serial.print("Respuesta: ");
+    Serial.println(payload); // ThingSpeak devuelve el número de entrada creado
+  } else {
+    Serial.print("Error en HTTP: ");
+    Serial.println(http.errorToString(httpCode).c_str());
+  }
+  
+  http.end();
+}
   
 
 void loop() {
+
+  if (WiFi.status() != WL_CONNECTED){
+  startWifi();
+  }
 
   //read Acelerometter
   mySensor.accelUpdate();
