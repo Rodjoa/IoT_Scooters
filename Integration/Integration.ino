@@ -83,7 +83,7 @@ void startWifi() {
   int i = 0;
   while (WiFi.status() != WL_CONNECTED) {   
     delay(1000);
-    Serial.print(++i); Serial.print(' ');
+    //Serial.print(++i); Serial.print(' ');
     Serial.println(WiFi.status());
   }
 
@@ -145,40 +145,53 @@ void sendSensorData(){
   //OPCION 2:
 
   void sendSensorData(){
-  HTTPClient http;
+    HTTPClient http;
+    
+    // Usa HTTPS y formato simple de parámetros GET
+    String url = "http://api.thingspeak.com/update?api_key=" + String(apiKey); //Los campos de dato se van agregando a la URL (borramos la s dejando http en vez de https)
+    url += "&field1=" + String(aY, 2);
+    url += "&field2=" + String(aZ, 2);
+    url += "&field3=" + String(aX, 2);
+    // Agregare los demás campos cuando los necesite
   
-  // Usa HTTPS y formato simple de parámetros GET
-  String url = "https://api.thingspeak.com/update?api_key=" + String(apiKey);
-  url += "&field1=" + String(aY, 2);
-  url += "&field2=" + String(aZ, 2);
-  url += "&field3=" + String(aX, 2);
-  // Agrega los demás campos cuando los necesites
-  
-  Serial.println("URL: " + url);
-  
-  http.begin(url);
-  int httpCode = http.GET();
-  
-  if(httpCode > 0) {
-    String payload = http.getString();
-    Serial.print("Código HTTP: ");
-    Serial.println(httpCode);
-    Serial.print("Respuesta: ");
-    Serial.println(payload); // ThingSpeak devuelve el número de entrada creado
-  } else {
-    Serial.print("Error en HTTP: ");
-    Serial.println(http.errorToString(httpCode).c_str());
-  }
-  
-  http.end();
+    Serial.println("URL: " + url);
+    
+    http.begin(url);
+    int httpCode = http.GET();
+    
+    if(httpCode > 0) {
+      String payload = http.getString();
+      Serial.print("Código HTTP: ");
+      Serial.println(httpCode);
+      Serial.print("Respuesta: ");
+      Serial.println(payload); // ThingSpeak devuelve el número de entrada creado
+    } else {
+      Serial.print("Error en HTTP: ");
+      Serial.println(http.errorToString(httpCode).c_str());
+    }
+    
+    http.end();
 }
   
 
 void loop() {
 
-  if (WiFi.status() != WL_CONNECTED){
-  startWifi();
-  }
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi desconectado. Reintentando conexión...");
+    WiFi.disconnect();
+    WiFi.begin(ssid, password);
+    int retry = 0;
+    while (WiFi.status() != WL_CONNECTED && retry < 10) {
+      delay(1000);
+      retry++;
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("Reconexión WiFi exitosa.");
+    } else {
+      Serial.println("Fallo en reconectar WiFi.");
+    }
+}
+
 
   //read Acelerometter
   mySensor.accelUpdate();
@@ -218,6 +231,6 @@ void loop() {
   Serial.print(volt_bateria, 3);
 
 
-  delay(11000);
+  delay(16000);
 
 }
