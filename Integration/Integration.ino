@@ -13,19 +13,21 @@
 //libreria acelerometro
 #include <Wire.h>
 #include <MPU9250_asukiaaa.h> // Librería para el MPU9250
+#include <Polyline.h>
 
-//Credenciales wifi
+//Credenciales wifi (Mi casa)
 const char* ssid = "VTR-6216549";
 const char* password = "n4rdVvqptnkf";
 //Credenciales Thingspeak
 //const char* server = "http://api.thingspeak.com/channels/2998250/bulk_update.json"; //OPCION 1  Se usa con formato de JSON PARA BULK UPDATE
 const char* server = "http://api.thingspeak.com/update";                            //OPCION 2  Usa formato simple de parametros get
-const char* apiKey = "X52LATNR1YTYZBJD";  // << TU Write API Key
+//const char* apiKey = "X52LATNR1YTYZBJD";  // << TU Write API Key
+const char* apiKey = "LVEIPL1ESA1SI07Z";    //Canal de prueba IoT_WiFi_Scooters
 
 
 //Variables acelerometro (PIN gpio 21 para SDA y GPIO 22 para SCL)
 MPU9250_asukiaaa mySensor;
-float aX, aY, aZ, aSqrt;
+float aX, aY, aZ, aSqrt, aceleration_converted;
 
 
 //Variables Bateria
@@ -38,11 +40,20 @@ float volt_bateria;
 const float R1 = 50000.0; // 50kΩ
 const float R2 = 33000.0; // 33kΩ
 
+const float V_MAX = 9.5;
+const float V_MIN = 6.0;
+float porcentaje_bateria; 
+
 
 //Variables GPS
 HardwareSerial gpsSerial(2);
 TinyGPSPlus gps;
 
+Polyline mypolyline;
+
+//´Parametros scooter
+const int Id_viaje = 1;
+const int Id_scooter = 34;
 
 
 //Funciones que llamaremos
@@ -80,9 +91,9 @@ void startWifi() {
   Serial.print("Connecting to ");
   Serial.print(ssid); Serial.println(" ...");
   
-  int i = 0;
+  //int i = 0;
   while (WiFi.status() != WL_CONNECTED) {   
-    delay(1000);
+    delay(200);
     //Serial.print(++i); Serial.print(' ');
     Serial.println(WiFi.status());
   }
@@ -144,15 +155,24 @@ void sendSensorData(){
 
   //OPCION 2:
 
-  void sendSensorData(){
+  void sendSensorData(){  //Utiliza las variables globales
     HTTPClient http;
-    
-    // Usa HTTPS y formato simple de parámetros GET
+
+    //CODIFICAREMOS AQUI LAS COORDENADAS GPS A FORMATO POLYLINE, POR SIMPLICIDAD
+    String gps_encoded = mypolyline.encodePolylinePoint(gps.location.lat(), gps.location.lng());
+    //Conversion aceleracion: El mpu9250 mide en "gravedades = 9.81m/s^2", así que lo pasaremos a metros.
+    //float aceleration_converted = aSqrt* 9.81;
+
+    // Usa HTTP y formato simple de parámetros GET
     String url = "http://api.thingspeak.com/update?api_key=" + String(apiKey); //Los campos de dato se van agregando a la URL (borramos la s dejando http en vez de https)
-    url += "&field1=" + String(aY, 2);
-    url += "&field2=" + String(aZ, 2);
-    url += "&field3=" + String(aX, 2);
-    // Agregare los demás campos cuando los necesite
+    url += "&field1=" + String(Id_viaje);                     //Id Viaje cte=1
+    url += "&field2=" + String(Id_scooter);                   //Id Scooter cte = 034
+    url += "&field3=" + gps_encoded;                          //GPS codificado en Polyline
+    url += "&field4=" + String(aceleration_converted,2);      //Aceleración neta (euclidiana)
+    url += "&field5=" + String(porcentaje_bateria, 2);              //Nivel de batería (%). Se considera bateria llena a 9.5V 
+    
+
+    // Segun Yohanns deben ir estos campos: ID viaje (ctte 1), Id scooter (elegir), GPS CODIFICADO (DE?), Aceleración euclidiana y Nivel de bateria. ( 5 campos) 
   
     Serial.println("URL: " + url);
     
@@ -182,7 +202,7 @@ void loop() {
     WiFi.begin(ssid, password);
     int retry = 0;
     while (WiFi.status() != WL_CONNECTED && retry < 10) {
-      delay(1000);
+      delay(200); //cambiamos 1000 por 500 en start wifi igual
       retry++;
     }
     if (WiFi.status() == WL_CONNECTED) {
@@ -193,18 +213,26 @@ void loop() {
 }
 
 
-  //read Acelerometter
+  //read Acelerometter. COMENTAMOS PARA VER EL EFECTO DE TOMAR MENOS LECTURAS
   mySensor.accelUpdate();
   aX = mySensor.accelX();
+  delay(20);
   aY = mySensor.accelY();
+  delay(20);
   aZ = mySensor.accelZ();
+  delay(20);
   aSqrt = mySensor.accelSqrt();
+  aceleration_converted = aSqrt * 9.81;   //Convertimos aceleracion desde "gravedades" a la unidad m/s^2
 
   //read Battery
   lectura_adc = analogRead(BatteryLevel);              // valor de 0 a 4095
   volt_adc = lectura_adc / 4095.0 * 3.3;               // voltaje en el pin
   volt_bateria = volt_adc * ((R1 + R2) / R2);          // voltaje real
-  
+  //Calcularemos el porcentaje de carga ttomando como Voltaje minimo de operacion 6V
+  // Cálculo del porcentaje de carga basado en rango operativo
+  //float porcentaje_bateria = (volt_bateria - V_MIN) / (V_MAX - V_MIN) * 100.0;
+  porcentaje_bateria = (volt_bateria - V_MIN) / (V_MAX - V_MIN) * 100.0;
+  porcentaje_bateria = constrain(porcentaje_bateria, 0, 100);  // Limita a 0–100%
 
   // read GPS
 
@@ -223,12 +251,13 @@ void loop() {
   sendSensorData();
 
     // Imprime los datos por serial
-  Serial.print("Acelerómetro [g]: ");
-  Serial.print("X = "); Serial.print(aX, 2);
-  Serial.print(", Y = "); Serial.print(aY, 2);
-  Serial.print(", Z = "); Serial.println(aZ, 2);
-  Serial.print(", Aceleración neta = "); Serial.println(aSqrt, 2);
-  Serial.print(volt_bateria, 3);
+  Serial.print("Id Viaje: "); Serial.print(Id_viaje);
+  Serial.print("Id Scooter: "); Serial.print(Id_scooter);
+  Serial.print(", GPS encoded = "); Serial.print(mypolyline.encodePolylinePoint(gps.location.lat(), gps.location.lng()));
+  Serial.print(", Aceleración [m/s^2] = "); Serial.println(aceleration_converted, 2);
+  Serial.print(", volt_ADC = "); Serial.println(volt_adc,3);
+  Serial.print(", volt_bateria = "); Serial.println(volt_bateria,3);
+  Serial.print(",porcentaje_bateria = "); Serial.println(porcentaje_bateria);
 
 
   delay(16000);
